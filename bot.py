@@ -2,8 +2,12 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from storage import admins, groups, terms, apis, add_admin, remove_admin, add_group, remove_group, add_term, remove_term, add_api, remove_api
 import requests
+import urllib3
 
-TOKEN = "8724329197:AAEO8O8hpqrT5CKQf3VclpmDniVgqJ9Vw_Y"  # ⚠️ replace this
+# ✅ disable SSL warnings (Railway fix)
+urllib3.disable_warnings()
+
+TOKEN = "8724329197:AAEO8O8hpqrT5CKQf3VclpmDniVgqJ9Vw_Y"
 
 def is_admin(user_id):
     return user_id in admins
@@ -90,9 +94,8 @@ async def add_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = context.args[0]
 
-    # ✅ VALIDATION FIX
     if not url.startswith("http"):
-        await update.message.reply_text("❌ Invalid API. Use full https:// URL")
+        await update.message.reply_text("❌ Use full https:// URL")
         return
 
     add_api(url)
@@ -135,17 +138,25 @@ async def run_search(app):
             try:
                 print("Calling:", api, term)
 
-                r = requests.get(
-                    api,
-                    params={"term": term},
-                    timeout=20,
-                    verify=False  # ✅ Railway SSL fix
-                )
+                # ✅ RETRY LOGIC
+                for attempt in range(3):
+                    try:
+                        r = requests.get(
+                            api,
+                            params={"term": term},
+                            timeout=60,     # ✅ FIXED (was 20)
+                            verify=False
+                        )
 
-                if r.status_code != 200:
-                    raise Exception(f"HTTP {r.status_code}")
+                        if r.status_code != 200:
+                            raise Exception(f"HTTP {r.status_code}")
 
-                data = r.json()
+                        data = r.json()
+                        break
+
+                    except Exception as e:
+                        if attempt == 2:
+                            raise e
 
                 text = f"🔍 {term}\n"
 
