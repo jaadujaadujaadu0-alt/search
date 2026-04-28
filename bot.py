@@ -1,13 +1,10 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from storage import admins, groups, terms, add_admin, remove_admin, add_group, remove_group, add_term, remove_term
+from storage import admins, groups, terms, apis, add_admin, remove_admin, add_group, remove_group, add_term, remove_term, add_api, remove_api
 import requests
-
-API_URL = "https://your-api.up.railway.app/search"
 
 TOKEN = "8724329197:AAEO8O8hpqrT5CKQf3VclpmDniVgqJ9Vw_Y"
 
-# ---------- Helpers ----------
 def is_admin(user_id):
     return user_id in admins
 
@@ -18,18 +15,23 @@ async def send_to_groups(app, text):
         except:
             pass
 
-# ---------- Commands ----------
+# -------- Commands --------
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
-/add <term> - add search term
-/remove <term> - remove term
-/call - force call now
+/add <term>
+/remove <term>
+/call
+
+/api <url>
+/deleteapi <url>
+/listapi
+
 /addadmin <id>
 /deleteadmin <id>
-/addgroup - set this group
-/deletegroup - remove this group
-/help - show commands
+
+/addgroup
+/deletegroup
 """
     await update.message.reply_text(text)
 
@@ -76,25 +78,55 @@ async def delgroup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remove_group(update.effective_chat.id)
     await update.message.reply_text("Group removed")
 
-# ---------- Core logic ----------
+# -------- API Commands --------
+
+async def add_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    url = context.args[0]
+    add_api(url)
+    await update.message.reply_text(f"API added:\n{url}")
+
+async def delete_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    url = context.args[0]
+    remove_api(url)
+    await update.message.reply_text("API removed")
+
+async def list_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    if not apis:
+        await update.message.reply_text("No APIs added")
+        return
+
+    text = "APIs:\n"
+    for a in apis:
+        text += f"- {a}\n"
+
+    await update.message.reply_text(text)
+
+# -------- Core --------
 
 async def run_search(app):
     for term in terms:
-        try:
-            r = requests.get(API_URL, params={"term": term}, timeout=20)
-            data = r.json()
+        for api in apis:
+            try:
+                r = requests.get(api, params={"term": term}, timeout=20)
+                data = r.json()
 
-            text = f"🔍 {term}\n"
+                text = f"🔍 {term}\n"
 
-            for r in data["results"]:
-                text += f"- {r}\n"
+                for res in data.get("results", []):
+                    text += f"- {res}\n"
 
-            await send_to_groups(app, text)
+                await send_to_groups(app, text)
 
-        except Exception as e:
-            await send_to_groups(app, f"Error for {term}")
+            except:
+                await send_to_groups(app, f"Error: {term}\nAPI: {api}")
 
-# ---------- Start bot ----------
+# -------- Start --------
 
 def start_bot():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -103,9 +135,15 @@ def start_bot():
     app.add_handler(CommandHandler("add", add))
     app.add_handler(CommandHandler("remove", remove))
     app.add_handler(CommandHandler("call", call))
+
     app.add_handler(CommandHandler("addadmin", addadmin_cmd))
     app.add_handler(CommandHandler("deleteadmin", deladmin_cmd))
+
     app.add_handler(CommandHandler("addgroup", addgroup_cmd))
     app.add_handler(CommandHandler("deletegroup", delgroup_cmd))
+
+    app.add_handler(CommandHandler("api", add_api_cmd))
+    app.add_handler(CommandHandler("deleteapi", delete_api_cmd))
+    app.add_handler(CommandHandler("listapi", list_api_cmd))
 
     return app
