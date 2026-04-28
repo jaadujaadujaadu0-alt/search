@@ -8,20 +8,15 @@ app = FastAPI()
 telegram_app = start_bot()
 scheduler = AsyncIOScheduler()
 
-# ---------------- STARTUP ----------------
-
 @app.on_event("startup")
 async def startup():
     await telegram_app.initialize()
     await telegram_app.start()
 
-    # ✅ correct polling (NO crash)
     asyncio.create_task(telegram_app.updater.start_polling())
 
     scheduler.add_job(run_search, "interval", minutes=30, args=[telegram_app])
     scheduler.start()
-
-# ---------------- SHUTDOWN ----------------
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -29,13 +24,9 @@ async def shutdown():
     await telegram_app.stop()
     await telegram_app.shutdown()
 
-# ---------------- HOME ----------------
-
 @app.get("/")
 def home():
     return {"status": "bot + api running"}
-
-# ---------------- SEARCH ----------------
 
 @app.get("/search")
 def search(term: str):
@@ -58,7 +49,6 @@ def search(term: str):
         page.wait_for_selector("li.result-item")
 
         items = page.query_selector_all("li.result-item")
-        total = len(items)
 
         results = []
         for item in items[:2]:
@@ -70,6 +60,6 @@ def search(term: str):
 
         return {
             "term": term,
-            "total": total,
+            "total": len(items),
             "results": results
         }
