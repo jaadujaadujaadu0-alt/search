@@ -3,7 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from storage import admins, groups, terms, apis, add_admin, remove_admin, add_group, remove_group, add_term, remove_term, add_api, remove_api
 import requests
 
-TOKEN = "8724329197:AAEO8O8hpqrT5CKQf3VclpmDniVgqJ9Vw_Y"
+TOKEN = "8724329197:AAEO8O8hpqrT5CKQf3VclpmDniVgqJ9Vw_Y"  # ⚠️ replace this
 
 def is_admin(user_id):
     return user_id in admins
@@ -12,10 +12,10 @@ async def send_to_groups(app, text):
     for gid in groups:
         try:
             await app.bot.send_message(chat_id=gid, text=text)
-        except:
-            pass
+        except Exception as e:
+            print("Send error:", e)
 
-# -------- Commands --------
+# ---------------- COMMANDS ----------------
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
@@ -78,12 +78,23 @@ async def delgroup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remove_group(update.effective_chat.id)
     await update.message.reply_text("Group removed")
 
-# -------- API Commands --------
+# ---------------- API COMMANDS ----------------
 
 async def add_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+
+    if not context.args:
+        await update.message.reply_text("❌ Provide API URL")
+        return
+
     url = context.args[0]
+
+    # ✅ VALIDATION FIX
+    if not url.startswith("http"):
+        await update.message.reply_text("❌ Invalid API. Use full https:// URL")
+        return
+
     add_api(url)
     await update.message.reply_text(f"API added:\n{url}")
 
@@ -97,6 +108,7 @@ async def delete_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+
     if not apis:
         await update.message.reply_text("No APIs added")
         return
@@ -107,13 +119,32 @@ async def list_api_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text)
 
-# -------- Core --------
+# ---------------- CORE FIXED ----------------
 
 async def run_search(app):
+    if not apis:
+        await send_to_groups(app, "❌ No APIs configured")
+        return
+
+    if not terms:
+        await send_to_groups(app, "❌ No terms added")
+        return
+
     for term in terms:
         for api in apis:
             try:
-                r = requests.get(api, params={"term": term}, timeout=20)
+                print("Calling:", api, term)
+
+                r = requests.get(
+                    api,
+                    params={"term": term},
+                    timeout=20,
+                    verify=False  # ✅ Railway SSL fix
+                )
+
+                if r.status_code != 200:
+                    raise Exception(f"HTTP {r.status_code}")
+
                 data = r.json()
 
                 text = f"🔍 {term}\n"
@@ -123,10 +154,13 @@ async def run_search(app):
 
                 await send_to_groups(app, text)
 
-            except:
-                await send_to_groups(app, f"Error: {term}\nAPI: {api}")
+            except Exception as e:
+                await send_to_groups(
+                    app,
+                    f"❌ Error: {term}\nAPI: {api}\n{str(e)}"
+                )
 
-# -------- Start --------
+# ---------------- START ----------------
 
 def start_bot():
     app = ApplicationBuilder().token(TOKEN).build()
