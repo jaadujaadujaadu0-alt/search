@@ -12,7 +12,6 @@ async def startup():
     await telegram_app.initialize()
     await telegram_app.start()
 
-    # every 30 min
     scheduler.add_job(run_search, "interval", minutes=30, args=[telegram_app])
     scheduler.start()
 
