@@ -1,6 +1,7 @@
 admins = {8011957004}
 groups = set()
 terms = set()
+apis = set()
 
 def add_admin(chat_id):
     admins.add(chat_id)
@@ -19,3 +20,9 @@ def add_term(term):
 
 def remove_term(term):
     terms.discard(term)
+
+def add_api(url):
+    apis.add(url)
+
+def remove_api(url):
+    apis.discard(url)
