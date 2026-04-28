@@ -9,17 +9,23 @@ scheduler = AsyncIOScheduler()
 
 @app.on_event("startup")
 async def startup():
+    # initialize bot
     await telegram_app.initialize()
     await telegram_app.start()
 
-    # ✅ START POLLING (FIX)
-    asyncio.create_task(telegram_app.bot.initialize())
-    asyncio.create_task(telegram_app.run_polling())
+    # ✅ CORRECT WAY: start polling WITHOUT breaking loop
+    asyncio.create_task(telegram_app.updater.start_polling())
 
     # scheduler
     scheduler.add_job(run_search, "interval", minutes=30, args=[telegram_app])
     scheduler.start()
 
+@app.on_event("shutdown")
+async def shutdown():
+    await telegram_app.updater.stop()
+    await telegram_app.stop()
+    await telegram_app.shutdown()
+
 @app.get("/")
 def home():
-    return {"status": "bot running"}
+    return {"status": "bot + api running"}
