@@ -1,37 +1,18 @@
 from fastapi import FastAPI
-from bot import start_bot, run_search
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from playwright.sync_api import sync_playwright
-import asyncio
 
 app = FastAPI()
-telegram_app = start_bot()
-scheduler = AsyncIOScheduler()
 
-@app.on_event("startup")
-async def startup():
-    await telegram_app.initialize()
-    await telegram_app.start()
+URL = "https://www.lamix.org/tools"
 
-    asyncio.create_task(telegram_app.updater.start_polling())
-
-    scheduler.add_job(run_search, "interval", minutes=30, args=[telegram_app])
-    scheduler.start()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await telegram_app.updater.stop()
-    await telegram_app.stop()
-    await telegram_app.shutdown()
 
 @app.get("/")
 def home():
-    return {"status": "bot + api running"}
+    return {"status": "api running"}
+
 
 @app.get("/search")
 def search(term: str):
-    URL = "https://www.lamix.org/tools"
-
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
