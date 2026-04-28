@@ -8,22 +8,20 @@ app = FastAPI()
 telegram_app = start_bot()
 scheduler = AsyncIOScheduler()
 
-
-# ------------------- TELEGRAM + SCHEDULER -------------------
+# ---------------- STARTUP ----------------
 
 @app.on_event("startup")
 async def startup():
-    # start telegram bot
     await telegram_app.initialize()
     await telegram_app.start()
 
-    # ✅ start polling safely inside FastAPI loop
+    # ✅ correct polling (NO crash)
     asyncio.create_task(telegram_app.updater.start_polling())
 
-    # scheduler (every 30 min)
     scheduler.add_job(run_search, "interval", minutes=30, args=[telegram_app])
     scheduler.start()
 
+# ---------------- SHUTDOWN ----------------
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -31,15 +29,13 @@ async def shutdown():
     await telegram_app.stop()
     await telegram_app.shutdown()
 
-
-# ------------------- BASIC ROUTE -------------------
+# ---------------- HOME ----------------
 
 @app.get("/")
 def home():
     return {"status": "bot + api running"}
 
-
-# ------------------- SEARCH API -------------------
+# ---------------- SEARCH ----------------
 
 @app.get("/search")
 def search(term: str):
@@ -55,7 +51,6 @@ def search(term: str):
         page.goto(URL)
 
         page.wait_for_selector("#cli-input")
-
         page.fill("#cli-input", term)
         page.click("#search-btn")
 
@@ -66,13 +61,9 @@ def search(term: str):
         total = len(items)
 
         results = []
-        for item in items[:2]:  # only first 2
-            name_el = item.query_selector(".country-name")
-            fire_el = item.query_selector(".fire-emoji")
-
-            name = name_el.inner_text().strip() if name_el else ""
-            fire = " 🔥" if fire_el else ""
-
+        for item in items[:2]:
+            name = item.query_selector(".country-name").inner_text()
+            fire = " 🔥" if item.query_selector(".fire-emoji") else ""
             results.append(name + fire)
 
         browser.close()
